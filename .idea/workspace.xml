@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="ALL" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="92ebc8eb-f4c9-4c4e-8a6b-c17b07ee59d6" name="Changes" comment="Critical / Correctness&#10;#1 — IPv6 firewall blocking on Linux (guard_linux.go, common.go)&#10;The guard now enforces both families: a linuxFamily table drives parallel inet/inet6 ipsets (almighty_block_ips6, almighty_block_tor_ips6) with iptables and ip6tables rules. Added a shared splitIPsByFamily helper and refactored apply/check into applySet + ensureRejectRule. Previously IPv6 Tor/manual IPs were fetched but silently failed to enter the IPv4-only ipset.&#10;&#10;#2 — Duplicate firewall enforcer (main.go)&#10;The torfetch callback now drives the single continuous fwGuard (via its serialized reconcile mutex) instead of a second fwApply instance writing the same rule names. fwApply remains only as the synchronous startup one-shot (needed for the apply-once semantics in noprotection builds), so there are no longer two concurrent writers.&#10;&#10;Suggestions&#10;#3 / #5 — Dead code — Deleted the entire unused internal/dnsengine package (which also eliminates the plaintext 1.1.1.1:53 bootstrap resolver from #5), plus the uncalled, untested runtime hosts functions HostsPath/EnforceHostsLoop/enforceHosts in redirects.go and their now-unused imports.&#10;&#10;#4 — README (README.md) — Corrected the claims that the hosts file is enforced between markers, that the blocklist is &quot;consumed via redirects.ParseLines at runtime,&quot; and that markers live in main.go. Now describes the DNS+firewall reality and the embedded blocklist as inert/reserved. Also fixed the stale &quot;domains via resolved IPs&quot; firewall line.&#10;&#10;#6 — Atomic heartbeat write (watchdog.go) — writeOwnState now writes a temp file and os.Renames it over the target, so the partner role can't read a torn JSON heartbeat and trigger a spurious restart.&#10;&#10;#7 — Locale-independent interfaces (hijack_windows.go) — activeInterfaceNames now uses net.Interfaces() (FlagUp + non-loopback) instead of matching the English words &quot;Enabled&quot;/&quot;Connected&quot; in netsh output, which returned nothing on localized Windows.&#10;&#10;#8 — Logging symmetry (logging_unprotected.go) — Created the file that logging_protected.go referenced; the noprotection build now explicitly keeps the stderr logger." />
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="GOROOT" url="file://F:/Program Files/Go" />
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="GitHubPullRequestSearchHistory"><![CDATA[{
+  "lastFilter": {
+    "state": "OPEN",
+    "assignee": "vitorhugo-java"
+  }
+}]]></component>
+  <component name="GithubPullRequestsUISettings"><![CDATA[{
+  "selectedUrlAndAccountId": {
+    "url": "https://github.com/vitorhugo-java/almighty-blocker-unstoppable.git",
+    "accountId": "67620880-2fbd-47a5-b172-174594fa7e7b"
+  }
+}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 2,
+  &quot;fromUser&quot;: false
+}</component>
+  <component name="ProjectId" id="3CpANDFEtmuyw00FBgFYI0yZFul" />
+  <component name="ProjectLevelVcsManager">
+    <OptionsSetting value="false" id="Update" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent"><![CDATA[{
+  "keyToString": {
+    "ASKED_SHARE_PROJECT_CONFIGURATION_FILES": "true",
+    "ModuleVcsDetector.initialDetectionPerformed": "true",
+    "RunOnceActivity.GoLinterPluginOnboardingV2": "true",
+    "RunOnceActivity.GoLinterPluginStorageMigration": "true",
+    "RunOnceActivity.ShowReadmeOnStart": "true",
+    "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager.252": "true",
+    "RunOnceActivity.git.unshallow": "true",
+    "RunOnceActivity.go.analysis.ui.options.defaults": "true",
+    "RunOnceActivity.go.formatter.settings.were.checked": "true",
+    "RunOnceActivity.go.modules.go.list.on.any.changes.was.set": "true",
+    "RunOnceActivity.typescript.service.memoryLimit.init": "true",
+    "codeWithMe.voiceChat.enabledByDefault": "false",
+    "git-widget-placeholder": "main",
+    "go.sdk.automatically.set": "true",
+    "ignore.virus.scanning.warn.message": "true",
+    "last_opened_file_path": "H:/Script/GoLang Projects/almighty-blocker-unstoppable/dist",
+    "node.js.detected.package.eslint": "true",
+    "node.js.selected.package.eslint": "(autodetect)",
+    "nodejs_package_manager_path": "npm"
+  }
+}]]></component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="H:\Script\GoLang Projects\almighty-blocker-unstoppable\dist" />
+    </key>
+  </component>
+  <component name="SharedIndexes">
+    <attachedChunks>
+      <set>
+        <option value="bundled-gosdk-72a9cf600ed8-3dd3895e5e08-org.jetbrains.plugins.go.sharedIndexes.bundled-GO-261.23567.143" />
+        <option value="bundled-js-predefined-d6986cc7102b-31caf2ab9e3c-JavaScript-GO-261.23567.143" />
+      </set>
+    </attachedChunks>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="92ebc8eb-f4c9-4c4e-8a6b-c17b07ee59d6" name="Changes" comment="" />
+      <created>1777072095673</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1777072095673</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="UnknownFeatures">
+    <option featureType="dependencySupport" implementationName="javascript:npm:react" />
+    <option featureType="dependencySupport" implementationName="executable:docker" />
+    <option featureType="dependencySupport" implementationName="javascript:npm:vite" />
+    <option featureType="dependencySupport" implementationName="executable:kubectl" />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Critical / Correctness&#10;#1 — IPv6 firewall blocking on Linux (guard_linux.go, common.go)&#10;The guard now enforces both families: a linuxFamily table drives parallel inet/inet6 ipsets (almighty_block_ips6, almighty_block_tor_ips6) with iptables and ip6tables rules. Added a shared splitIPsByFamily helper and refactored apply/check into applySet + ensureRejectRule. Previously IPv6 Tor/manual IPs were fetched but silently failed to enter the IPv4-only ipset.&#10;&#10;#2 — Duplicate firewall enforcer (main.go)&#10;The torfetch callback now drives the single continuous fwGuard (via its serialized reconcile mutex) instead of a second fwApply instance writing the same rule names. fwApply remains only as the synchronous startup one-shot (needed for the apply-once semantics in noprotection builds), so there are no longer two concurrent writers.&#10;&#10;Suggestions&#10;#3 / #5 — Dead code — Deleted the entire unused internal/dnsengine package (which also eliminates the plaintext 1.1.1.1:53 bootstrap resolver from #5), plus the uncalled, untested runtime hosts functions HostsPath/EnforceHostsLoop/enforceHosts in redirects.go and their now-unused imports.&#10;&#10;#4 — README (README.md) — Corrected the claims that the hosts file is enforced between markers, that the blocklist is &quot;consumed via redirects.ParseLines at runtime,&quot; and that markers live in main.go. Now describes the DNS+firewall reality and the embedded blocklist as inert/reserved. Also fixed the stale &quot;domains via resolved IPs&quot; firewall line.&#10;&#10;#6 — Atomic heartbeat write (watchdog.go) — writeOwnState now writes a temp file and os.Renames it over the target, so the partner role can't read a torn JSON heartbeat and trigger a spurious restart.&#10;&#10;#7 — Locale-independent interfaces (hijack_windows.go) — activeInterfaceNames now uses net.Interfaces() (FlagUp + non-loopback) instead of matching the English words &quot;Enabled&quot;/&quot;Connected&quot; in netsh output, which returned nothing on localized Windows.&#10;&#10;#8 — Logging symmetry (logging_unprotected.go) — Created the file that logging_protected.go referenced; the noprotection build now explicitly keeps the stderr logger." />
+    <option name="LAST_COMMIT_MESSAGE" value="Critical / Correctness&#10;#1 — IPv6 firewall blocking on Linux (guard_linux.go, common.go)&#10;The guard now enforces both families: a linuxFamily table drives parallel inet/inet6 ipsets (almighty_block_ips6, almighty_block_tor_ips6) with iptables and ip6tables rules. Added a shared splitIPsByFamily helper and refactored apply/check into applySet + ensureRejectRule. Previously IPv6 Tor/manual IPs were fetched but silently failed to enter the IPv4-only ipset.&#10;&#10;#2 — Duplicate firewall enforcer (main.go)&#10;The torfetch callback now drives the single continuous fwGuard (via its serialized reconcile mutex) instead of a second fwApply instance writing the same rule names. fwApply remains only as the synchronous startup one-shot (needed for the apply-once semantics in noprotection builds), so there are no longer two concurrent writers.&#10;&#10;Suggestions&#10;#3 / #5 — Dead code — Deleted the entire unused internal/dnsengine package (which also eliminates the plaintext 1.1.1.1:53 bootstrap resolver from #5), plus the uncalled, untested runtime hosts functions HostsPath/EnforceHostsLoop/enforceHosts in redirects.go and their now-unused imports.&#10;&#10;#4 — README (README.md) — Corrected the claims that the hosts file is enforced between markers, that the blocklist is &quot;consumed via redirects.ParseLines at runtime,&quot; and that markers live in main.go. Now describes the DNS+firewall reality and the embedded blocklist as inert/reserved. Also fixed the stale &quot;domains via resolved IPs&quot; firewall line.&#10;&#10;#6 — Atomic heartbeat write (watchdog.go) — writeOwnState now writes a temp file and os.Renames it over the target, so the partner role can't read a torn JSON heartbeat and trigger a spurious restart.&#10;&#10;#7 — Locale-independent interfaces (hijack_windows.go) — activeInterfaceNames now uses net.Interfaces() (FlagUp + non-loopback) instead of matching the English words &quot;Enabled&quot;/&quot;Connected&quot; in netsh output, which returned nothing on localized Windows.&#10;&#10;#8 — Logging symmetry (logging_unprotected.go) — Created the file that logging_protected.go referenced; the noprotection build now explicitly keeps the stderr logger." />
+  </component>
+</project>
