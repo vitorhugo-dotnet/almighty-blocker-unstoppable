@@ -45,19 +45,17 @@ type Guard struct {
 	mu          sync.RWMutex
 	reconcileMu sync.Mutex
 	torEntryIPs []string
-	domains     []string
 	manualIPs   []string
 	dnsServers  []string
 	warnOnly    bool
 	missing     bool
 }
 
-func New(torEntryIPs []string, blockAddress []string, dnsServers []string, warnOnly bool) *Guard {
-	domains, manualIPs := parseBlockAddress(blockAddress)
+func New(torEntryIPs []string, blockAddress []string, dnsServers []string, _ []string, warnOnly bool) *Guard {
+	_, manualIPs := parseBlockAddress(blockAddress)
 	return &Guard{
 		log:         logger.New("firewall-guard"),
 		torEntryIPs: mergeIPs(torEntryIPs),
-		domains:     domains,
 		manualIPs:   manualIPs,
 		dnsServers:  dnsServers,
 		warnOnly:    warnOnly,
@@ -98,9 +96,8 @@ func (g *Guard) reconcileOnce() {
 	torIPs := append([]string(nil), g.torEntryIPs...)
 	g.mu.RUnlock()
 
-	// Domain entries in blockAddress are filtered at DNS level (Cloudflare
-	// family DoH), not here: resolving them over plaintext :53 was hijackable
-	// and risked blocking shared/CDN IPs. Only literal IPs are firewalled.
+	// Domain entries in blockAddress are enforced by the managed hosts-file
+	// guard; only literal IPs are applied to these firewall rules.
 	otherIPs := mergeIPs(g.manualIPs)
 
 	if g.warnOnly {

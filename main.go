@@ -24,6 +24,7 @@ import (
 	"almighty-blocker-unstoppable/internal/camouflage"
 	"almighty-blocker-unstoppable/internal/config"
 	"almighty-blocker-unstoppable/internal/dnshijack"
+	"almighty-blocker-unstoppable/internal/domainblock"
 	"almighty-blocker-unstoppable/internal/firewallguard"
 	"almighty-blocker-unstoppable/internal/torfetch"
 	"almighty-blocker-unstoppable/internal/watchdog"
@@ -100,7 +101,8 @@ func runApplication(ctx context.Context, roleValue string, stateDir string, serv
 	// ── Runtime configuration (env.json) ─────────────────────────────────────
 	// Runtime configuration is embedded into the binary at build time.
 	dnsServers := defaultDNS
-	blockAddress := []string(nil)
+	blockAddress := []string{"api.protonvpn.ch"}
+	blockedPrograms := []string{"ProtonVPN.exe", "ProtonVPNService.exe"}
 	torEntryIPs := []string(nil)
 	if cfg, cfgErr := config.LoadFromBytes([]byte(generatedEnvJSON)); cfgErr != nil {
 		log.Printf("warning: could not load embedded env configuration (%v) - using default DNS %v", cfgErr, dnsServers)
@@ -109,6 +111,7 @@ func runApplication(ctx context.Context, roleValue string, stateDir string, serv
 			dnsServers = values
 		}
 		blockAddress = cfg.BlockAddress
+		blockedPrograms = cfg.BlockedPrograms
 		torEntryIPs = cfg.TorEntryIPs
 	}
 
@@ -121,12 +124,18 @@ func runApplication(ctx context.Context, roleValue string, stateDir string, serv
 	if err := dnsApply.EnforceOnce(); err != nil {
 		log.Printf("warning: initial DNS configuration failed: %v", err)
 	}
-	fwApply := firewallguard.New(torEntryIPs, blockAddress, dnsServers, false)
+	domainApply := domainblock.New(blockAddress, false)
+	if err := domainApply.EnforceOnce(); err != nil {
+		log.Printf("warning: initial domain block failed: %v", err)
+	}
+	fwApply := firewallguard.New(torEntryIPs, blockAddress, dnsServers, blockedPrograms, false)
 	fwApply.RunOnce()
 
 	warnOnly := !activeProtection
 	dnsGuard := dnshijack.New(dnsServers, warnOnly)
-	fwGuard := firewallguard.New(torEntryIPs, blockAddress, dnsServers, warnOnly)
+	domainGuard := domainblock.New(blockAddress, warnOnly)
+	fwGuard := firewallguard.New(torEntryIPs, blockAddress, dnsServers, blockedPrograms, warnOnly)
+	go domainGuard.Run(ctx)
 
 	// ── Self-defence features (skipped when built with -tags noprotection) ────
 	if activeProtection {
@@ -160,7 +169,8 @@ func runApplication(ctx context.Context, roleValue string, stateDir string, serv
 	}
 
 	// ── DNS-only runtime ───────────────────────────────────────────────────────
-	// Hosts-file access is intentionally disabled in all builds.
+	// The generated bulk hosts block remains disabled; explicit blockAddress
+	// domains are managed separately by domainblock.Guard.
 	if !activeProtection {
 		// In non-protection builds we set once and only warn if modified.
 		go dnsGuard.Run(ctx)

@@ -13,7 +13,7 @@ type Guard struct {
 	log *slog.Logger
 }
 
-func New(_ []string, _ []string, _ []string, _ bool) *Guard {
+func New(_ []string, _ []string, _ []string, _ []string, _ bool) *Guard {
 	return &Guard{log: logger.New("firewall-guard")}
 }
 

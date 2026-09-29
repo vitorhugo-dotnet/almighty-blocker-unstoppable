@@ -8,14 +8,23 @@ if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administra
 }
 
 $svc = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-if ($null -eq $svc) {
-    Write-Host "Service '$ServiceName' does not exist."
-    exit 0
-}
-
-if ($svc.Status -ne 'Stopped') {
+if ($null -ne $svc -and $svc.Status -ne 'Stopped') {
     Stop-Service -Name $ServiceName -Force
+    (Get-Service -Name $ServiceName).WaitForStatus('Stopped', [TimeSpan]::FromSeconds(30))
 }
 
-sc.exe delete $ServiceName | Out-Null
-Write-Host "Service '$ServiceName' deleted."
+if ($null -ne $svc) {
+    sc.exe delete $ServiceName | Out-Null
+    if ($LASTEXITCODE -ne 0) {
+        throw "Could not delete service '$ServiceName'."
+    }
+    Write-Host "Service '$ServiceName' deleted."
+} else {
+    Write-Host "Service '$ServiceName' does not exist."
+}
+
+$installedExe = Join-Path $env:ProgramFiles "Almighty Blocker\almighty-blocker.exe"
+if (Test-Path -LiteralPath $installedExe) {
+    Remove-Item -LiteralPath $installedExe -Force
+    Write-Host "Removed protected executable: $installedExe"
+}

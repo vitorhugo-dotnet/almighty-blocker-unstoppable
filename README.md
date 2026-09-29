@@ -3,12 +3,10 @@
 Almighty Blocker is a small daemon that continuously enforces a curated set of host redirects on the local machine and protects that configuration with an optional watchdog and self-defence features.
 
 Key ideas:
-- Blocking is enforced at two layers: encrypted DNS (the configured Cloudflare *family* resolvers
-  filter malware/adult domains, and `blockAddress` domains resolve to `0.0.0.0`) and the host
-  firewall (literal IPs from `torEntryIPs` and `blockAddress` are blocked outbound).
+- Blocking is enforced through configured encrypted DNS, managed hosts-file entries for domains
+  in `blockAddress`, and outbound firewall rules for literal IPs in `torEntryIPs` and `blockAddress`.
 - The daemon enforces configured external DNS servers on active interfaces and monitors for tampering.
-- Note: direct system hosts-file enforcement is not active in the current build. `cmd/build` still
-  embeds a blocklist constant (`generated_hosts.go`), but it is reserved and not consumed at runtime.
+- The generated bulk hosts block remains reserved; only explicit `blockAddress` domains are managed at runtime.
 - A primary/watchdog pair provides automatic restart: the primary does the work, the watchdog monitors its heartbeat and restarts it if it crashes.
 - Self-defence (camouflage, DNS guard, automatic service/unit registration) is compiled in by default. To disable these features build with the `noprotection` tag.
 
@@ -41,7 +39,8 @@ Fields:
 - `DNS`: list of external DNS servers to enforce on the host adapters. Both IPv4 and IPv6 entries are supported and enforced per family. Default is Cloudflare *family* filtering (malware + adult): `1.1.1.3`/`1.0.0.3` and their IPv6 equivalents `2606:4700:4700::1113`/`2606:4700:4700::1003`.
 - `upstreamDNS`: legacy compatibility field. If `DNS` is omitted, values from `upstreamDNS` are used when possible.
 - `torEntryIPs`: optional list of IPv4/IPv6 addresses of Tor guard/entry nodes to block at the network level. See [Managing torEntryIPs](#managing-torentryips) for how to populate this list.
-- `blockAddress`: optional manual block list. Accepts domains and IPs. **Literal IPs** are blocked directly by firewall. **Domains** are *not* firewalled — they are blocked at DNS level by the Cloudflare family DoH resolver (e.g. `xvideos.com` resolves to `0.0.0.0`). Resolving domains to IPs at the firewall was removed because plaintext `:53` lookups are hijackable and could block shared/CDN IPs, breaking unrelated internet access.
+- `blockAddress`: manual block list. Domains are added to a managed section of the system hosts file and literal IPs are blocked by the firewall. `api.protonvpn.ch` is always included by default. Domain entries avoid static IP lists, which are fragile for services that rotate addresses.
+- `blockedPrograms`: executable names or absolute paths blocked by Windows Firewall and AppLocker. ProtonVPN is enabled by default with `ProtonVPN.exe` and `ProtonVPNService.exe`. AppLocker path rules only cover the configured/default paths; copying an executable elsewhere or renaming it can bypass a path rule.
 
 On **Windows 11** every configured DNS server IP is mapped to the Cloudflare family DNS-over-HTTPS endpoint (`https://family.cloudflare-dns.com/dns-query`) with strict, fallback-free auto-upgrade (`netsh dns add encryption ... autoupgrade=yes udpfallback=no`), so resolution is always encrypted and cannot be downgraded to plaintext. On Linux, DoH depends on the host resolver stack (systemd-resolved/NetworkManager) and is not configured by this service.
 
@@ -94,7 +93,7 @@ Flags:
 
 When protection is enabled (default build):
 - The primary enforces configured DNS servers on the OS network interfaces.
-- The primary applies firewall blocks for the literal IPs in `torEntryIPs` and `blockAddress`. Domains in `blockAddress` are blocked at DNS level (Cloudflare family DoH), not firewalled. Both IPv4 and IPv6 IPs are enforced (iptables/ip6tables on Linux, per-family netsh rules on Windows).
+- The primary blocks domains from `blockAddress` through a managed hosts-file section on Windows and Linux, and enforces literal IPs in `torEntryIPs` and `blockAddress` through the host firewall. Both IPv4 and IPv6 IPs are enforced (iptables/ip6tables on Linux, per-family netsh rules on Windows). On Windows, configured executables are also blocked by outbound program rules and AppLocker deny rules.
 - Tor IPs are reconciled continuously: new Onionoo IPs are added and removed IPs are cleaned automatically from Tor-labeled firewall rules.
 - A watchdog process monitors the primary through heartbeat files in `--state-dir`. The watchdog may spawn or restart the primary when needed.
 
@@ -109,8 +108,10 @@ Linux (systemd):
 - The unit runs the binary as root so it can manage `/etc/hosts`.
 
 Windows (Service Control Manager):
-- On startup the primary checks for a Windows service with the configured name. If missing it will create or update the service using `sc.exe` and set `binPath` to include `--role=primary --state-dir=... --service-name="<name>"`.
-- Use the scripts in `deploy/windows` to install/uninstall the service from an elevated PowerShell prompt.
+- On startup the primary checks for a Windows service with the configured name. If missing it will create or update the service using `sc.exe` and set `binPath` to the stable executable under `%ProgramFiles%\Almighty Blocker`, with `--role=primary --state-dir=... --service-name="<name>"`.
+- `deploy/windows/install-service.ps1` installs that copy with access for SYSTEM and Administrators to modify it, and read/execute access for Users. Run installation and uninstallation from an elevated PowerShell prompt.
+- The Service Control Manager restarts the service after unexpected failures (5, 15, then 60 seconds). An intentional Stop remains effective; Administrators can stop or uninstall the service. This protects the binary from standard-user changes, but is not tamper-proof against administrators.
+- Recovery only works while the registered executable exists. If an older install points to a missing binary, reinstall with `deploy/windows/install-service.ps1` and the built executable to repair its path.
 
 Note: service registration requires administrative privileges.
 

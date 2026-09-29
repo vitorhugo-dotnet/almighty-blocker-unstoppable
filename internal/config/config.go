@@ -92,13 +92,20 @@ type EnvConfig struct {
 	// DNSLower accepts lowercase "dns" for compatibility with external tools.
 	DNSLower []string `json:"dns"`
 
-	// BlockAddress contains manual DNS block rules. Each entry can be a domain
-	// name (e.g. "google.com") or an IP address (e.g. "1.2.3.4").
+	// BlockAddress contains manual domain and IP blocks. Domains are mapped to
+	// 0.0.0.0 in a managed system hosts-file section; IPs are blocked by firewall.
 	BlockAddress []string `json:"blockAddress"`
 
 	// TorEntryIPs are IP entries that should be blocked at firewall level.
 	TorEntryIPs []string `json:"torEntryIPs"`
+
+	// BlockedPrograms are executable names or absolute paths to block on Windows.
+	BlockedPrograms StringList `json:"blockedPrograms"`
 }
+
+const protonAPIDomain = "api.protonvpn.ch"
+
+var defaultBlockedPrograms = []string{"ProtonVPN.exe", "ProtonVPNService.exe"}
 
 // Loader owns the live configuration value and keeps it in sync with the file on disk.
 //
@@ -166,6 +173,10 @@ func LoadFromBytes(data []byte) (*EnvConfig, error) {
 }
 
 func normalizeEnvConfig(cfg *EnvConfig) {
+	cfg.BlockAddress = appendDefault(cfg.BlockAddress, protonAPIDomain)
+	for _, program := range defaultBlockedPrograms {
+		cfg.BlockedPrograms = appendDefault(cfg.BlockedPrograms, program)
+	}
 	if len(cfg.DNS) == 0 && len(cfg.DNSLower) > 0 {
 		cfg.DNS = append([]string(nil), cfg.DNSLower...)
 	}
@@ -190,6 +201,15 @@ func normalizeEnvConfig(cfg *EnvConfig) {
 	for i, item := range cfg.TorEntryIPs {
 		cfg.TorEntryIPs[i] = strings.TrimSpace(item)
 	}
+}
+
+func appendDefault(values []string, value string) []string {
+	for _, current := range values {
+		if strings.EqualFold(strings.TrimSpace(current), value) {
+			return values
+		}
+	}
+	return append(values, value)
 }
 
 func normalizeUpstreamAddress(raw string) string {

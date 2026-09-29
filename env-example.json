@@ -17,8 +17,13 @@
     "2606:4700:4700::1003"
   ],
   "blockAddress": [
+    "api.protonvpn.ch",
     "google.com",
     "1.2.3.4"
+  ],
+  "blockedPrograms": [
+    "ProtonVPN.exe",
+    "ProtonVPNService.exe"
   ],
   "torEntryIPs": [
     "152.53.144.50",

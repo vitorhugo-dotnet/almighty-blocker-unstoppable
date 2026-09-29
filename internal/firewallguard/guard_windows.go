@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -27,28 +28,29 @@ const (
 )
 
 type Guard struct {
-	log         *slog.Logger
-	mu          sync.RWMutex
-	reconcileMu sync.Mutex
-	lastChunks  map[string]int
-	torEntryIPs []string
-	domains     []string
-	manualIPs   []string
-	dnsServers  []string
-	warnOnly    bool
-	missing     bool
+	log              *slog.Logger
+	mu               sync.RWMutex
+	reconcileMu      sync.Mutex
+	lastChunks       map[string]int
+	torEntryIPs      []string
+	blockedPrograms  []string
+	manualIPs        []string
+	dnsServers       []string
+	warnOnly         bool
+	missing          bool
+	appLockerChecked bool
 }
 
-func New(torEntryIPs []string, blockAddress []string, dnsServers []string, warnOnly bool) *Guard {
-	domains, manualIPs := parseBlockAddress(blockAddress)
+func New(torEntryIPs []string, blockAddress []string, dnsServers []string, blockedPrograms []string, warnOnly bool) *Guard {
+	_, manualIPs := parseBlockAddress(blockAddress)
 	return &Guard{
-		log:         logger.New("firewall-guard"),
-		lastChunks:  map[string]int{},
-		torEntryIPs: mergeIPs(torEntryIPs),
-		domains:     domains,
-		manualIPs:   manualIPs,
-		dnsServers:  dnsServers,
-		warnOnly:    warnOnly,
+		log:             logger.New("firewall-guard"),
+		lastChunks:      map[string]int{},
+		torEntryIPs:     mergeIPs(torEntryIPs),
+		blockedPrograms: append([]string(nil), blockedPrograms...),
+		manualIPs:       manualIPs,
+		dnsServers:      dnsServers,
+		warnOnly:        warnOnly,
 	}
 }
 
@@ -86,9 +88,8 @@ func (g *Guard) reconcileOnce() {
 	torIPs := append([]string(nil), g.torEntryIPs...)
 	g.mu.RUnlock()
 
-	// Domain entries in blockAddress are filtered at DNS level (Cloudflare
-	// family DoH), not here: resolving them over plaintext :53 was hijackable
-	// and risked blocking shared/CDN IPs. Only literal IPs are firewalled.
+	// Domain entries in blockAddress are enforced by the managed hosts-file
+	// guard; only literal IPs are applied to these firewall rules.
 	otherIPs := mergeIPs(g.manualIPs)
 	torChunks := splitIPChunksByFamily(torIPs, chunkSize)
 	otherChunks := splitIPChunksByFamily(otherIPs, chunkSize)
@@ -99,7 +100,19 @@ func (g *Guard) reconcileOnce() {
 	// reports drift without modifying anything.
 	otherDrift := g.reconcile(windowsRulePrefix, otherChunks)
 	torDrift := g.reconcile(windowsTorRulePrefix, torChunks)
-	drift := otherDrift || torDrift
+	programDrift := g.reconcileBlockedPrograms(blockedProgramPaths(g.blockedPrograms))
+	drift := otherDrift || torDrift || programDrift
+
+	if !g.warnOnly && !g.appLockerChecked {
+		g.appLockerChecked = true
+		if paths := blockedProgramPaths(g.blockedPrograms); len(paths) > 0 {
+			if err := applyAppLocker(paths); err != nil {
+				g.log.Error("AppLocker could not block ProtonVPN execution", "error", err)
+			}
+		} else {
+			g.log.Warn("AppLocker could not block ProtonVPN execution: no executable paths configured")
+		}
+	}
 
 	if g.warnOnly {
 		if drift {
@@ -118,6 +131,79 @@ func (g *Guard) reconcileOnce() {
 		g.log.Warn("firewall change detected")
 	}
 	g.missing = false
+}
+
+func (g *Guard) reconcileBlockedPrograms(paths []string) bool {
+	drift := false
+	for _, path := range paths {
+		ruleName := blockedProgramRuleName(path)
+		actual, action, exists := g.ruleProgramPath(ruleName)
+		if exists && isBlockAction(action) && strings.EqualFold(filepath.Clean(actual), filepath.Clean(path)) {
+			continue
+		}
+		drift = true
+		if g.warnOnly {
+			continue
+		}
+		g.writeProgramRule(ruleName, path)
+	}
+	return drift
+}
+
+func blockedProgramRuleName(path string) string {
+	base := filepath.Base(path)
+	return "Almighty Block Program " + base + " " + appLockerRuleID(path)[1:9]
+}
+
+func (g *Guard) ruleProgramPath(ruleName string) (string, string, bool) {
+	cmd := exec.Command("netsh", "advfirewall", "firewall", "show", "rule", "name="+ruleName, "verbose")
+	hideWindow(cmd)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", "", false
+	}
+	var programPath, action string
+	for _, line := range strings.Split(string(out), "\n") {
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(trimmed)
+		for _, label := range []string{"Program:", "Application:", "Programa:", "Aplicativo:"} {
+			if strings.HasPrefix(lower, strings.ToLower(label)) {
+				programPath = strings.TrimSpace(trimmed[len(label):])
+				break
+			}
+		}
+		for _, label := range []string{"Action:", "Ação:"} {
+			if strings.HasPrefix(lower, strings.ToLower(label)) {
+				action = strings.TrimSpace(trimmed[len(label):])
+				break
+			}
+		}
+	}
+	return programPath, action, true
+}
+
+func isBlockAction(action string) bool {
+	action = strings.TrimSpace(action)
+	return strings.EqualFold(action, "Block") || strings.EqualFold(action, "Bloquear") || strings.HasPrefix(strings.ToLower(action), "bloquear ")
+}
+
+func (g *Guard) writeProgramRule(ruleName string, programPath string) {
+	cmdDel := exec.Command("netsh", "advfirewall", "firewall", "delete", "rule", "name="+ruleName)
+	hideWindow(cmdDel)
+	_ = cmdDel.Run()
+	cmd := exec.Command(
+		"netsh", "advfirewall", "firewall", "add", "rule",
+		"name="+ruleName,
+		"dir=out",
+		"action=block",
+		"enable=yes",
+		"profile=any",
+		"program="+programPath,
+	)
+	hideWindow(cmd)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		g.log.Error("failed to apply executable firewall rule", "rule", ruleName, "program", programPath, "error", err, "output", strings.TrimSpace(string(output)))
+	}
 }
 
 // reconcile compares every chunk rule against the desired remote-IP set and,
